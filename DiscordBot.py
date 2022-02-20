@@ -1,3 +1,4 @@
+from re import search
 import discord
 import selenium
 import os
@@ -51,23 +52,28 @@ class Whatsapp:
         cls.chrome.get(cls.wapweb)
         WebDriverWait(cls.chrome, 50000000).until(EC.presence_of_element_located((By.XPATH, cls.search_xpath)))
 
-    def send_message(self,sender,msg):
+    def search(self,sender):
         search_box = self.chrome.find_element_by_xpath(self.search_xpath)
         search_box.clear()
         time.sleep(0.1)
         search_box.send_keys(sender)
         time.sleep(0.7)
 
+        return self.chrome.find_element_by_xpath(self.sender_xpath)
+
+    def send_message(self,sender,msg):
+        sender_title = self.search(sender)
+
         try:
-            sender_title = self.chrome.find_element_by_xpath(self.sender_xpath)
             sender_title.click()
-            time.sleep(0.2)
         except:
             return "Sender's Name not found!"
 
-        name=self.chrome.find_element_by_xpath(self.parent_xpath).text
-
+        time.sleep(0.2)
+        
+        name = self.chrome.find_element_by_xpath(self.parent_xpath).text
         input_box = self.chrome.find_element_by_xpath(self.input_xpath)
+
         pyperclip.copy(msg)
         input_box.send_keys(Keys.SHIFT, Keys.INSERT)
         time.sleep(0.1)
@@ -76,36 +82,49 @@ class Whatsapp:
 
         return name
 
-    def read_messages(self):
+    def read_message(self,unread_contact):
         data = [[] for i in range(3)]
-        unread_contacts=self.chrome.find_elements(By.CLASS_NAME,self.unread)
+        data[0].append(unread_contact.find_element(By.CLASS_NAME,self.unread_contact_names).text)
 
-        for unread_contact in unread_contacts:
-            data[0].append(unread_contact.find_element(By.CLASS_NAME,self.unread_contact_names).text)
+        try:
+            number = int(unread_contact.find_element(By.CLASS_NAME,self.unread_msg_no).text)
+        except:
+            number = int((unread_contact.find_elements(By.CLASS_NAME,self.unread_msg_no)[1]).text)
 
-            try:
-                number = int(unread_contact.find_element(By.CLASS_NAME,self.unread_msg_no).text)
-            except:
-                number = int((unread_contact.find_elements(By.CLASS_NAME,self.unread_msg_no)[1]).text)
+        unread_contact.find_element(By.CLASS_NAME,self.unread_contact_names).click()
+        time.sleep(0.5)
 
-            unread_contact.find_element(By.CLASS_NAME,self.unread_contact_names).click()
-            time.sleep(0.5)
-            # messages = self.chrome.find_elements_by_xpath(self.messages)
-            area = self.chrome.find_element_by_xpath(self.area_message)
+        # messages = self.chrome.find_elements_by_xpath(self.messages)
+        area = self.chrome.find_element_by_xpath(self.area_message)
 
-            for i in range(0,number):
-                messages = area.find_elements(By.CLASS_NAME,self.messages)
+        for i in range(0,number/2):
+            messages = area.find_elements(By.CLASS_NAME,self.messages)
 
-                for message in messages:
+            for message in messages:
+                try:
                     data[1].append(message.text)
-                    # data[2].append(message.parent.parent.parent.find_element(By.CLASS_NAME,self.msg_time))
+                except:
+                    pass
 
-                time.sleep(0.1)
-                area.send_keys(Keys.PAGE_DOWN)
-                time.sleep(0.3)
+            time.sleep(0.1)
+            area.send_keys(Keys.PAGE_DOWN)
+            time.sleep(0.3)
 
         return filter(data,number)
+
+    def read_messages_individual(self,sender):
+        return self.read_message(self.search(sender))
+
+    def read_messages_all(self):
+        data = []
+        unread_contacts = self.chrome.find_elements(By.CLASS_NAME,self.unread)
+
+        for unread_contact in unread_contacts:
+            data.append(self.read_message(unread_contact))
+
+        return data
     
+
 @client.event
 async def on_ready():
 
@@ -127,7 +146,7 @@ async def on_message(message):
         initial=inp[0].lower()
         com=inp[1].lower()
 
-        if(initial=="x" or initial=="urlx"):
+        if(initial=="x"):
 
             if(com=="helpx"):
                 await channel.send(embed=discord.Embed(title= "Available Commands:\n", description= "send <sender's name> <message>\t\t-> it will push the link in the default channel\n\nshow", colour=discord.Colour.blue()))
@@ -155,34 +174,61 @@ async def on_message(message):
                 try:
                     limit=int(inp[2])
                     sender=sender_msg(inp,3)[0]
+                    message = ""
                     c=0
 
                     async for msg in channel.history(limit=limit + 1000):
                         if msg.author != client.user:
                             if ((msg.content[0:6]).lower()!="x send" and (msg.content[0:7]).lower()!="x scrap"):
-                                message="*_"+msg.author.name+":_* "+msg.content
-                                try:
-                                    wap.send_message(sender,message)
-                                except:
-                                    Whatsapp.start()
-                                    wap.send_message(sender,message)
+                                message += "*_" + msg.author.name + ":_* " + msg.content + "\n"
                                 c+=1
                                 if (c >= limit):
                                     break
-
+                    
+                    try:
+                        wap.send_message(sender,message)
+                    except:
+                        Whatsapp.start()
+                        wap.send_message(sender,message)
+                        
                 except:
                     await channel.send(embed=discord.Embed(title= "ERROR!\n", description= "Sender's name not found!", colour=discord.Colour.red()))
 
             if(com=="read"):
-                try:
-                    data=wap.read_messages()
-                    print(data)
-                except:
-                    Whatsapp.start()
-                    data=wap.read_messages()
-                    print(data)
+                unread_messages = ""
 
-#Read unread message and print it in discord
+                if(len(inp)>=3):
+                    sender=sender_msg(inp,2)[0]
+                    try:
+                        data=wap.read_messages_individual(sender)
+                    except:
+                        Whatsapp.start()
+                        data=wap.read_messages_individual(sender)
+
+                else:
+                    try:
+                        data=wap.read_messages_all()
+                        print(data)
+                    except:
+                        Whatsapp.start()
+                        data=wap.read_messages_all()
+                        print(data)
+                
+                for i in range(0,len(data),3):
+                    unread_messages += data[i] + "\n"
+
+                    for j in range(1,len(data),3):
+                        for k in range (0,len(data[j])):
+                            unread_messages += '[' + data[j+1][k] + '] ' + data[j][k] + '\n'
+
+                    unread_messages += "\n\n"
+
+                if (unread_messages == ""):
+                    unread_messages = "No unread messages!"
+
+                await channel.send(embed=discord.Embed(title= "", description= unread_messages, colour=discord.Colour.red()))
+
+#Call
 #Send attatchments
 
 if __name__=="__main__":
