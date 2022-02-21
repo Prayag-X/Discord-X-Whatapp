@@ -6,6 +6,7 @@ import pyperclip
 import time
 import logging
 import requests
+import math
 import json
 
 from discord import channel
@@ -94,17 +95,16 @@ class Whatsapp:
         unread_contact.find_element(By.CLASS_NAME,self.unread_contact_names).click()
         time.sleep(0.5)
 
-        # messages = self.chrome.find_elements_by_xpath(self.messages)
         area = self.chrome.find_element_by_xpath(self.area_message)
 
-        for i in range(0,number/2):
+        for i in range(0,int(math.ceil(number/3.0))):
             messages = area.find_elements(By.CLASS_NAME,self.messages)
 
             for message in messages:
                 try:
                     data[1].append(message.text)
                 except:
-                    pass
+                    data[1].append("Error!\n00:00 XX")
 
             time.sleep(0.1)
             area.send_keys(Keys.PAGE_DOWN)
@@ -208,25 +208,20 @@ async def on_message(message):
                 else:
                     try:
                         data=wap.read_messages_all()
-                        print(data)
                     except:
                         Whatsapp.start()
                         data=wap.read_messages_all()
-                        print(data)
                 
-                for i in range(0,len(data),3):
-                    unread_messages += data[i] + "\n"
+                for chats in data:
+                    unread_messages = ""
 
-                    for j in range(1,len(data),3):
-                        for k in range (0,len(data[j])):
-                            unread_messages += '[' + data[j+1][k] + '] ' + data[j][k] + '\n'
+                    for i in range(0,len(chats[1])):
+                        unread_messages += '[' + chats[2][i] + '] ' + chats[1][i] + '\n'
 
-                    unread_messages += "\n\n"
+                    await channel.send(embed=discord.Embed(title= chats[0][0], description= unread_messages, colour=discord.Colour.dark_orange()))
 
-                if (unread_messages == ""):
-                    unread_messages = "No unread messages!"
-
-                await channel.send(embed=discord.Embed(title= "", description= unread_messages, colour=discord.Colour.red()))
+                if (data[0][1] == []):
+                    await channel.send(embed=discord.Embed(title= "", description= "No unread messages!", colour=discord.Colour.red()))
 
 #Call
 #Send attatchments

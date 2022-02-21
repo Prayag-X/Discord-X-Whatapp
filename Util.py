@@ -25,7 +25,10 @@ def filter(data, number):
 
     for msg in data[1]:
         data[2].append(msg.split('\n')[-1])
-        content.append(msg.split('\n')[-2])
+        try:
+            content.append(msg.split('\n')[-2])
+        except:
+            content.append('Unreadable text!')
 
     data[1]=content
 
@@ -54,6 +57,21 @@ def filter(data, number):
                 if(d2>d1):
                     data[1][j], data[1][j+1] = data[1][j+1], data[1][j]
                     data[2][j], data[2][j+1] = data[2][j+1], data[2][j]
+
+                elif(d2==d1):
+                    if(data[2][j+1][1]==':'):
+                        d3=int(data[2][j+1][2:4])
+                    else:
+                        d3=int(data[2][j+1][3:5])
+                    
+                    if(data[2][j][1]==':'):
+                        d4=int(data[2][j][2:4])
+                    else:
+                        d4=int(data[2][j][3:5])
+
+                    if(d4>d3):
+                        data[1][j], data[1][j+1] = data[1][j+1], data[1][j]
+                        data[2][j], data[2][j+1] = data[2][j+1], data[2][j]
 
     data[1]=data[1][-number:]
     data[2]=data[2][-number:]
